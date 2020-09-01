@@ -1,0 +1,94 @@
+---
+title: "Machine Learning Project"
+author: "Kassim"
+date: "8/28/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load required packages for analysis
+
+```{r}
+library(caret)
+library(rpart)
+library(ggplot2)
+library(corrplot)
+library(randomForest)
+library(rattle)
+```
+
+## Load data
+
+```{r}
+training_raw <- read.csv("pml-training.csv")[,-1]
+testing <- read.csv("pml-testing.csv")[,-1]
+# check dimension of the training and test dataset
+dim(training_raw)
+dim(testing)
+```
+## Clean data
+```{r}
+NZV <- nearZeroVar(training_raw)
+training <- training_raw[, -NZV]
+testing <- testing[, -NZV]
+
+# remove cases that have many missing/NA values
+NaValues <- sapply(training, function(x) mean(is.na(x))) > 0.9
+training <- training[, NaValues == "FALSE"]
+testing <- testing[, NaValues == "FALSE"]
+
+# remove id and time variables
+training <- training[,-c(1:5)]
+testing <- testing[,-c(1:5)]
+
+# check dimension of the cleaned up dataset
+dim(training)
+
+dim(testing)
+
+# take a look at the training dataset
+head(training)
+```
+## Prepare data partition, for later validation
+```{r}
+inTrain <- createDataPartition(y= training$classe, p = 0.7, list = FALSE)
+training <- training[inTrain, ]
+crossvalidation <- training[-inTrain, ]
+```
+## Now we can train our models given the preprocess with PCA
+```{r}
+# decision trees
+model_tree <- train(classe~., data = training, method = "rpart")
+# print result of model prediction on original training and crossvalidation dataset
+
+predict_training_tree <- predict(model_tree, training)
+
+confusionmatrix_training_tree <- confusionMatrix(predict_training_tree, training$classe)
+
+predict_crossvalidation_tree <- predict(model_tree, crossvalidation)
+
+confusionmatrix_cv_tree <- confusionMatrix(predict_crossvalidation_tree, crossvalidation$classe)
+
+print(confusionmatrix_cv_tree)
+```
+##  Conclusion
+The confusionmatrix showed that the accuracy of the random forest models is better than the decision tree model. Therefore, we used this model to predict on the testing dataset.
+
+
+##  Appendix
+```{r}
+predictor_factor <- which(sapply(training, class) == "factor")
+# explore correlation between predictors
+predictor_cor <- abs(cor(training[,-predictor_factor]))
+# turn lower tri to 0
+predictor_cor[lower.tri(predictor_cor, diag = TRUE)] <- 0
+# visualize result
+corrplot(predictor_cor, method  = "color", type = "upper", cl.lim = c(0,1), tl.col = rgb(0, 0, 0))
+
+which(predictor_cor > 0.8, arr.ind = TRUE)
+```
